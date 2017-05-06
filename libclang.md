@@ -8,23 +8,31 @@ http://eli.thegreenplace.net/2011/07/03/parsing-c-in-python-with-clang
 API to clang. It allows us to do many things we could also do with LibTooling,
 but provides a much lighter interface. Most importantly, because this interface
 is so high-level, it is guaranteed to be (quite) stable. This is especially
-useful for editors or other applications that want to use clang's power for
-syntax-highlighting, code-completion or refactoring, but don't want to be at the
-mercy of the clang upstream.
+useful for editors or other applications that want to use clang's powerful AST
+representation for syntax-highlighting, code-completion or refactoring, but
+don't want to be at the mercy of the clang upstream.
 
 More precisely, libClang is a shared library that packages clang into a
 high-level API for AST-traversal. What is nice is that next to the core C API,
 there are also Python bindings (and [Go](https://github.com/go-clang/v3.9)).
 
+To access libClang from Python, the `libClang` dynamic library (`.dylib` or
+`.so`) must be available (visible) from wherever you want to import the Python
+bindings. Once this requirement is satisfied, you can import `clang.cindex`:
+
+```python
+import clang.cindex as clang
+```
+
 libClang's Python bindings work on translation units. We would then usually
-create an *index* on those translation units, so we can accessed the parsed AST.
-An index is actually a group of translation units that can be compiled and
+create an *index* on those translation units, so we can access the parsed AST.
+An index is actually a group of translation units (TUs) that can be compiled and
 linked together. This function enables cross-TU referencing. To create an index
 on a set of TUs in Python, we use the following code:
 
 ```python
-index = clang.cindex.Index.create()
-tu = index.parse(sys.argv[])
+index = clang.Index.create()
+tu = index.parse(sys.argv[1])
 ```
 
 where `clang.cindex` is the Python binding module. `Index.create()` calls the
@@ -35,9 +43,9 @@ libClang. The result of `index.parse()` is a `CXTranslationUnit` in C and a
 that we can query and manipulate.
 
 The most important attribute of the `TranslationUnit` is its `cursor`. A cursor
-is basically a pointer/iterator that points to some node in a parsed AST. It
-basically abstracts away the differences between entities in the AST (`Decl` vs
-`Expr` vs `Type`) and provides a unified interface to manipulating the AST.
+is a pointer/iterator that points to some node in an AST. It abstracts away the
+differences between entities in the AST (`Decl` vs `Expr` vs `Type`) and
+provides a *unified interface to manipulating the AST*.
 
 The most interesting attributes of a cursor are:
 
@@ -47,17 +55,21 @@ The most interesting attributes of a cursor are:
 * `get_children`: the children of the node, to allow for further traversal.
 
 For `get_children`, the Python and C APIs diverge slightly. The C APIs work with
-visitation functions, whereas the Python API lets us do the traversal ourself. For example, given the following C/C++ code:
+visitation functions, where you define a function taking the current node and
+some context data (such as the parent of the node or some "client data" you
+supply yourself) and then walk the tree *for you*. In the Python API, we
+*traverse* the AST ourselves (in a very simple and intuitive way). For example,
+given the following C/C++ code:
 
 ```cpp
-int main() { int x; }
+int main() { int x = 42; }
 ```
 
 We can use the following recursive function to traverse the AST and print the kinds of every node we find:
 
 ```python
 def visit(cursor):
-  print(cursor.kind)
+  print('{0} ({1})'.format(cursor.spelling, cursor.kind))
   for child in cursor.get_children():
     visit(child)
 ```
@@ -65,6 +77,8 @@ def visit(cursor):
 The Python bindings use [ctypes](https://docs.python.org/3.6/library/ctypes.html) to call the *libclang* shared library.
 
 # Baby steps with libClang
+
+http://bastian.rieck.ru/blog/posts/2015/baby_steps_libclang_ast/
 
 An *index* groups multiple translation units together. Interestingly, with libclang, we need not necessarily parse the code ourselves, in the program. Rather, we can export an AST file with clang like so:
 
@@ -174,7 +188,7 @@ int main(int argc, char const* argv[]) {
 
   CXCursor root = clang_getTranslationUnitCursor(tu);
 
-  unsigned int level = 0;
+  unsigned level = 0;
   clang_visitChildren(root, visit, &level);
 
   std::cout << std::flush;
@@ -188,9 +202,81 @@ int main(int argc, char const* argv[]) {
 You would pass to this an AST or PCH (pre-compiled header) file. The former can be created using `clang++ -emit-ast <file> -- <options>`.
 
 https://clang.llvm.org/doxygen/group__CINDEX.html#ga51eb9b38c18743bf2d824c6230e61f93
-http://bastian.rieck.ru/blog/posts/2015/baby_steps_libclang_ast/
 
 ## Exploring the Source
+
+A general overview of libclang can be found here: https://clang.llvm.org/doxygen/group__CINDEX.html
+
+The source code (or at least the documentation) is organized into the following
+sections:
+
+- *Compilation database functions* allow reading, manipulating and querying
+compilation databases. For example, you can get the compile arguments for a
+particular file. A key entity here is the `CXCompileCommands` class.
+
+- *String manipulation routines* allow reading and disposing `CXStrings`, which
+are libClang's representation of strings (you usually want to convert them to C
+strings with `clang_getCString()`).
+
+- *File access functions* contain methods for querying the filename,
+modification time and unique ID of files. An abstraction here is the `CXFile`,
+which is probably the C version of `FileEntry`. For example, you can get the
+`CXFile` for a translation unit.
+
+- Routines for managing *source locations* contain the usual methods to
+manipulate `SourceLocation`s and `SourceRange`s, here prefixed with `CX`. There
+are methods to compare source locations for equality, check if a location is in
+a system or user-defined file (header) and handle the spelling/expansion
+locations of macros.
+
+- The *diagnostics infrastructure* like `clang_getDiagnostic` which takes a
+translation unit and an index for the diagnostic, which returns a `CXDiagnostic`
+data structure. This is the interface to the diagnostics functionality of clang,
+which is very powerful.
+
+- Functions to *parse translation units*, which we usually use at the very
+beginning of our libClang programs to get an abstract syntax tree representation
+of some C/C++/Objective-C source file.
+
+- *Cursor manipulation and access functions*, including essential functions
+like `clang_getCursorKind` or `clang_isTranslationUnit`.
+
+- Functions to *map between source locations and cursors* like
+`clang_getCursor` which maps a translation unit and source locations to the most
+specific cursor clang can find for that location. Also has a method
+`clang_getCursorExtent` which returns a `CXSourceRange` describing the source
+range of the token under the cursor.
+
+- Functions to *gain information about type* (i.e. language type, like
+`int`) of a node (cursor). The most important function is probably
+`clang_getCursorType`, which gets the `CXType` for a cursor.
+
+- *Cross-referencing routines* to get the string names or representations of
+cursor, canonical cursors (e.g. the one declaration that also defines a
+function) or the definition for a cursor pointing to a declaration
+(given that definition is in the same translation unit).
+
+- *Funky functions* to get information about the mangled names of functions or
+C++ constructors/destructors.
+
+- *C++ specific functions* to get information about templates, constructors,
+destructors, virtual functions (for example if a method is pure virtual) and
+methods in general, i.e. if they are static or const. Also provides information
+about fields of a struct or class being `mutable`.
+
+- The interface to the *lexer and preprocessor*, which gives access to raw
+tokenization (quite cool) and getting information about the extent
+(`CXSourceRange`), spelling and of course, most importantly, the kind (!) of a
+token (e.g. punctuation, keyword, literal, identifier or comment).
+
+- *Debugging functions* for doing miscellaneous things like enabling stack traces or getting the spelling (string representation) of a cursor kind.
+
+- *Code completion* functionality for very complex code completion support.
+
+- More *miscellaneous functions* for querying the version of clang, for
+example. Also has functionality to inspect the includes of a file via visitation
+(like in `libTooling`), i.e. you can really inspect every `#include` and sort or
+verify them, for example.
 
 Note that libclang has good support for C++ (like templates):
 

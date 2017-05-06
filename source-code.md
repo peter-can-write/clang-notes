@@ -53,8 +53,8 @@ SourceLocation getSpellingLoc(SourceLocation Loc) const {
 ```
 
 Basically, it checks if the source location already is in source code, rather
-than in a macro expansion. If so, it just returns the location. Else, it does
-calls following function:
+than in a macro expansion. If so, it just returns the location. Else, it calls
+following function:
 
 ```cpp
 SourceLocation SourceManager::getSpellingLocSlowCase(SourceLocation Loc) const {
