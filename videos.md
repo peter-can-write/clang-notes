@@ -91,8 +91,8 @@ https://www.youtube.com/watch?v=U98rhV6wONo
 
 The interfaces to clang:
 
-* Clang Plugins: run as part of the compilation, very tightly coupled. Can break build when they fail (because you check something).
-* libClang: high-level C API, gives you things like cursors or references to code.
+* Clang Plugins: run as part of the compilation, provides tight integration with the compiler. Can break build when they fail (because you check something, for example, if an anti-pattern exists and you can fail the build on that occasion).
+* libClang: high-level C API, gives you things like cursors or references to code. Stable API though provides a high level of abstraction.
 * libTooling: More powerful than libClang, less coupled than plugins.
 
 libTooling can run over a string, or run over multiple files in a project.
