@@ -104,7 +104,7 @@ some of the most important methods one deals with when interacting with the
 clang AST in C++ are nodes' so-called *glue methods*. Glue methods are methods
 that allow you to actually traverse the AST, basically bridging the gap between
 the various parts of the AST. For example, an If-statement consists of an
-`IfSmt`, with appropriate glue methods `getCond()`, `getThen()` and `getElse()`
+`IfStmt`, with appropriate glue methods `getCond()`, `getThen()` and `getElse()`
 to access the related parts of the AST.
 
 Every token in a C/C++ input stream is identified by a `SourceLocation`. Here, a
