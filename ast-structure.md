@@ -104,7 +104,7 @@ some of the most important methods one deals with when interacting with the
 clang AST in C++ are nodes' so-called *glue methods*. Glue methods are methods
 that allow you to actually traverse the AST, basically bridging the gap between
 the various parts of the AST. For example, an If-statement consists of an
-`IfSmt`, with appropriate glue methods `getCond()`, `getThen()` and `getElse()`
+`IfStmt`, with appropriate glue methods `getCond()`, `getThen()` and `getElse()`
 to access the related parts of the AST.
 
 Every token in a C/C++ input stream is identified by a `SourceLocation`. Here, a
@@ -117,14 +117,14 @@ lookup further information in the `SourceManager`. Otherwise you would have to
 store row, column and source-file information for every single node.
 
 To traverse the AST and to look for points of interest, we can either use the
-`RecursiveASTVistor` or `ASTMatcher` classes. Both of these approaches are
+`RecursiveASTVisitor` or `ASTMatcher` classes. Both of these approaches are
 embedded into LibTooling, which is nice as they save you the effort of
 traversing the AST yourself -- you only have to operate on it. The only downside
 is that this API is quite unstable. The alternative is to use libClang, which is
 the stable, high-level C API provided by clang.
 
-The first option we have is to use the `RecursiveASTVistor` technique. For this
-method, we subclass the `RecursiveASTVistor` class, which declares overridable
+The first option we have is to use the `RecursiveASTVisitor` technique. For this
+method, we subclass the `RecursiveASTVisitor` class, which declares overridable
 methods that we can redefine for custom behavior. Among others, the class
 provides methods to stop the recursive descent of the AST for `Decl`s
 (`visitDecl`), `Type`s (`visitType`) and more. Every such function should return
